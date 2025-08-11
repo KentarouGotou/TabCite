@@ -1,0 +1,5 @@
+# nginxで静的ファイルを配信
+FROM nginx:alpine
+COPY index.html /usr/share/nginx/html/index.html
+# ポートは80をEXPOSE。起動時に -p 8080:80 などで公開
+EXPOSE 80

@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Simple Tab Editor (VexFlow)</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; --accent:#38bdf8; }
+    body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;}
+    .wrap{max-width:1000px;margin:32px auto;padding:0 16px;}
+    .title{font-size:20px;font-weight:700;margin-bottom:16px}
+    .card{background:var(--card);border-radius:16px;box-shadow:0 10px 24px rgba(0,0,0,.3);padding:16px;margin-bottom:16px}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    .row label{font-size:12px;color:var(--muted)}
+    select,textarea,button,input{border-radius:10px;border:1px solid #1f2937;background:#0b1220;color:var(--text);padding:10px;font-size:14px}
+    textarea{width:100%;min-height:100px;line-height:1.5}
+    button{cursor:pointer;border-color:#0ea5e9}
+    button.primary{background:var(--accent);color:#0b1220;border:none;font-weight:700}
+    .hint{color:var(--muted);font-size:12px}
+    #renderer{overflow:auto;background:#0b1120;border-radius:12px;border:1px solid #1f2937}
+    .footer{color:var(--muted);font-size:12px;margin-top:8px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="title">Simple Tab Editor (VexFlow)</div>
+
+    <div class="card">
+      <div class="row" style="margin-bottom:12px;">
+        <div>
+          <label>Strings</label><br/>
+          <select id="stringCount">
+            <option value="6" selected>6</option>
+            <option value="7">7</option>
+          </select>
+        </div>
+        <div>
+          <label>Tuning (低音→高音)</label><br/>
+          <select id="tuning">
+            <option value="E/5,B/4,G/4,D/4,A/3,E/3" selected>Standard (EADGBE)</option>
+            <option value="E/5,B/4,G/4,D/4,A/3,D/3">Drop D</option>
+          </select>
+        </div>
+        <div>
+          <label>拍子</label><br/>
+          <select id="timeSig">
+            <option value="4/4" selected>4/4</option>
+            <option value="3/4">3/4</option>
+            <option value="6/8">6/8</option>
+          </select>
+        </div>
+        <div>
+          <label>音価（1音のデフォルト）</label><br/>
+          <select id="noteDur">
+            <option value="q" selected>4分(q)</option>
+            <option value="8">8分(8)</option>
+            <option value="h">2分(h)</option>
+            <option value="16">16分(16)</option>
+          </select>
+        </div>
+        <div style="margin-left:auto;">
+          <button id="renderBtn" class="primary">Render</button>
+          <button id="clearBtn">Clear</button>
+          <button id="downloadBtn">Download PNG</button>
+        </div>
+      </div>
+
+      <div class="hint">
+        入力例：
+        <code>0/6 2/5 2/4 | 2/4,2/3 0/1 3/2</code><br/>
+        形式：<strong>fret/string</strong>，和音は<strong>カンマ</strong>，小節は<strong>|</strong> 区切り
+      </div>
+
+      <textarea id="inputArea">0/6 2/5 2/4 | 2/4,2/3 0/1 3/2</textarea>
+    </div>
+
+    <div id="renderer" class="card">
+      <canvas id="vf-canvas"></canvas>
+    </div>
+
+    <div class="footer">Powered by VexFlow（CDN読み込み、ビルド不要）</div>
+  </div>
+
+  <!-- VexFlow UMD（グローバル Vex / Vex.Flow を提供）-->
+  <script src="https://unpkg.com/vexflow/releases/vexflow-debug.js"></script>
+  <script>
+    // Minimal Tab parser: "fret/string" tokens, chords separated by ","; bars by "|"
+    function parseTabInput(text) {
+      const measures = text.split('|').map(s => s.trim()).filter(Boolean);
+      return measures.map(m => {
+        const tokens = m.split(/\s+/).filter(Boolean);
+        return tokens.map(tok => tok.split(',').map(pair => {
+          const [fret, string] = pair.split('/').map(x => x.trim());
+          if (fret === undefined || string === undefined || isNaN(+fret) || isNaN(+string)) {
+            throw new Error(`不正なトークン: "${pair}"（形式は fret/string）`);
+          }
+          return { fret: String(+fret), string: String(+string) };
+        }));
+      });
+    }
+
+    function render() {
+      const VF = Vex.Flow;
+      const input = document.getElementById('inputArea').value;
+      const canvas = document.getElementById('vf-canvas');
+      const ctx = canvas.getContext('2d');
+      // サイズ調整
+      const width = Math.max(900, window.innerWidth * 0.9);
+      const height = 220;
+      canvas.width = width;
+      canvas.height = height;
+
+      // クリア
+      ctx.clearRect(0,0,width,height);
+
+      // Factory（Canvas）
+      const factory = new VF.Factory({ renderer: { elementId: 'vf-canvas', width, height, backend: VF.Renderer.Backends.CANVAS }});
+      const score = factory.EasyScore();
+      const system = factory.System();
+
+      const stringCount = parseInt(document.getElementById('stringCount').value, 10);
+      const tuningStr = document.getElementById('tuning').value; // 未使用（Easyに保つ）
+      const timeSig = document.getElementById('timeSig').value;
+      const defaultDur = document.getElementById('noteDur').value;
+
+      // 解析
+      let measures;
+      try {
+        measures = parseTabInput(input);
+      } catch (e) {
+        alert(e.message);
+        return;
+      }
+
+      // Layout
+      const measureWidth = Math.max(120, Math.floor((width - 40) / Math.max(1, measures.length)));
+      const staveY = 40;
+
+      // 各小節を描画
+      let cursorX = 20;
+      measures.forEach((events, idx) => {
+        const tabStave = new VF.TabStave(cursorX, staveY, measureWidth);
+        tabStave.addTimeSignature(timeSig);
+        tabStave.setNumLines(stringCount);
+        tabStave.setContext(factory.getContext()).draw();
+
+        // イベント（音符 or 和音）をTabNoteに
+        const notes = events.map(chord => new VF.TabNote({
+          positions: chord.map(({fret, string}) => ({ fret, str: parseInt(string,10) })),
+          duration: defaultDur
+        }));
+
+        // Voiceに積む
+        const voice = new VF.Voice({num_beats: parseInt(timeSig.split('/')[0],10),  beat_value: parseInt(timeSig.split('/')[1],10)})
+          .addTickables(notes);
+
+        // フォーマッタで整列
+        new VF.Formatter().joinVoices([voice]).format([voice], measureWidth - 20);
+        voice.draw(factory.getContext(), tabStave);
+
+        cursorX += measureWidth;
+      });
+    }
+
+    function downloadPNG() {
+      const canvas = document.getElementById('vf-canvas');
+      const link = document.createElement('a');
+      link.download = 'tab.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    document.getElementById('renderBtn').addEventListener('click', render);
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      document.getElementById('inputArea').value = '';
+      render();
+    });
+    document.getElementById('downloadBtn').addEventListener('click', downloadPNG);
+
+    // 初期レンダリング
+    window.addEventListener('load', render);
+    window.addEventListener('resize', () => { render(); });
+  </script>
+</body>
+</html>
