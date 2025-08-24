@@ -1,0 +1,14 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# 依存パッケージを先にインストール
+COPY package.json package-lock.json* ./
+RUN npm install react react-dom @types/react @types/react-dom --save && \
+    npm ci || npm install
+
+# ソースをコピー
+COPY . .
+
+EXPOSE 5173
+CMD ["npm","run","dev","--","--host","0.0.0.0"]

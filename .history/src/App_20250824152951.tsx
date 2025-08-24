@@ -6,7 +6,6 @@ const Score = () => {
 
   useEffect(() => {
     if (!containerRef.current) return;
-    containerRef.current.innerHTML = '';
     const factory = new Vex.Flow.Factory({
       renderer: { elementId: containerRef.current.id, width: 500, height: 200 }
     });

@@ -6,7 +6,6 @@ const Score = () => {
 
   useEffect(() => {
     if (!containerRef.current) return;
-    containerRef.current.innerHTML = '';
     const factory = new Vex.Flow.Factory({
       renderer: { elementId: containerRef.current.id, width: 500, height: 200 }
     });
@@ -20,7 +19,7 @@ const Score = () => {
     factory.draw();
   }, []);
 
-  return <div id="score" ref={containerRef} style={{background: "white"}}></div>;
+  return <div id="score" ref={containerRef}></div>;
 };
 
 export default Score;
