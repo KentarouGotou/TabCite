@@ -1,81 +1,107 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Factory } from "vexflow";
+import React, { useRef, useEffect, useState } from "react";
+
+const fretCount = 5;
+const stringCount = 6;
+const width = 400;
+const height = 200;
+const fretSpacing = width / fretCount;
+const stringSpacing = height / (stringCount - 1);
+// サンプルタブ譜（1次元配列に）
+const sampleTab = [
+  { positions: [ { string: 1, fret: 2 }, { string: 2, fret: 3 }, { string: 3, fret: 1 } ], duration: 1.2 },
+  { positions: [ { string: 4, fret: 2 } ], duration: 0.8 },
+  { positions: [ { string: 2, fret: 1 } ], duration: 1.0 },
+];
 
 const App = () => {
-  const [count, setCount] = useState(0); // 状態を保存
-  const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  // 再生中かどうか
+  const [playing, setPlaying] = useState(false);
+  // 現在のインデックス
+  const [currentIdx, setCurrentIdx] = useState(0);
+  // アニメーション進行度（0〜1）
+  const [progress, setProgress] = useState(0);
+  const frameRef = useRef<number | null>(null);
 
-  const handleClick = () => {
-    inputRef.current?.focus(); // input要素に直接アクセス
-  };
-
-  useEffect(() => {
-    console.log("コンポーネントが表示された！");
-    // ここに副作用を書く
-  }, []); // []は「初回だけ実行」の意味
-
-  useEffect(() => {
-    if (containerRef.current) {
-      // 既存の内容をクリア
-      containerRef.current.innerHTML = "";
-      // VexFlowで楽譜を描画
-      const vf = new Factory({ renderer: { elementId: containerRef.current, width: 500, height: 200 } });
-      const score = vf.EasyScore();
-      const system = vf.System();
-      system.addStave({
-        voices: [score.voice(score.notes("C4/q, D4, E4, F4"))]
-      }).addClef("treble").addTimeSignature("4/4");
-      vf.draw();
-    }
-  }, []);
-
-  return (
-    <div>
-      <h1>Music Score</h1>
-      <p>カウント: {count}</p>
-      <button onClick={() => setCount(count + 1)}>増やす</button>
-      <div>
-        <input ref={inputRef} type="text" />
-        <button onClick={handleClick}>フォーカス</button>
-      </div>
-      <div>Hello!</div>
-      <h1>VexFlow 楽譜表示サンプル</h1>
-      <div ref={containerRef}></div>
-    </div>
-  );
-};
-
-const Timer = () => {
-  const [seconds, setSeconds] = useState(0); // 表示用
-  const timerIdRef = useRef<NodeJS.Timeout | null>(null); // setIntervalのID
-  const startTimeRef = useRef<number | null>(null); // 開始時刻
-
+  // 再生ボタン押下時
   const handleStart = () => {
-    if (timerIdRef.current) return; // すでに動いていれば何もしない
-    startTimeRef.current = Date.now();
-    timerIdRef.current = setInterval(() => {
-      if (startTimeRef.current !== null) {
-        setSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
-      }
-    }, 100);
+    setPlaying(true);
+    setCurrentIdx(0);
+    setProgress(0);
   };
 
-  const handleStop = () => {
-    if (timerIdRef.current) {
-      clearInterval(timerIdRef.current);
-      timerIdRef.current = null;
-    }
-  };
+  // アニメーションループ
+  useEffect(() => {
+    if (!playing) return;
+    let startTime: number | null = null;
+    const animate = (timestamp: number) => {
+      if (startTime === null) startTime = timestamp;
+      const tab = sampleTab[currentIdx];
+      const duration = tab.duration * 1000; // ms
+      const elapsed = timestamp - startTime;
+      let prog = Math.min(elapsed / duration, 1);
+      setProgress(prog);
+      if (prog < 1) {
+        frameRef.current = requestAnimationFrame(animate);
+      } else {
+        // 次のノートへ
+        if (currentIdx < sampleTab.length - 1) {
+          setCurrentIdx(idx => idx + 1);
+          setProgress(0);
+        } else {
+          setPlaying(false);
+        }
+      }
+    };
+    frameRef.current = requestAnimationFrame(animate);
+    return () => {
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    };
+  }, [playing, currentIdx]);
+
+  // 現在のポジションを取得
+  const tab = sampleTab[currentIdx];
 
   return (
-    <div>
-      <p>経過秒数: {seconds}</p>
-      <button onClick={handleStart}>開始</button>
-      <button onClick={handleStop}>終了</button>
+    <div style={{ width: "100vw", height: "100vh" }}>
+      <button onClick={handleStart} disabled={playing} style={{margin:8}}>再生</button>
+      <svg width={width} height={height} style={{ background: "#fff" }}>
+        {/* フレット線 */}
+        {[...Array(fretCount)].map((_, i) => (
+          <line
+            key={i}
+            x1={i * fretSpacing}
+            y1={0}
+            x2={i * fretSpacing}
+            y2={height}
+            stroke="#888"
+            strokeWidth={i === 0 ? 6 : 2}
+          />
+        ))}
+        {/* 弦 */}
+        {[...Array(stringCount)].map((_, i) => (
+          <line
+            key={i}
+            x1={0}
+            y1={i * stringSpacing}
+            x2={width}
+            y2={i * stringSpacing}
+            stroke="#444"
+            strokeWidth={2}
+          />
+        ))}
+        {/* ポジションマーク */}
+        {playing && tab.positions.map((p, idx) => (
+          <circle
+            key={idx}
+            cx={(p.fret + 0.5) * fretSpacing}
+            cy={p.string * stringSpacing}
+            r={16}
+            fill="orange"
+          />
+        ))}
+      </svg>
     </div>
   );
 };
 
 export default App;
-export { Timer };

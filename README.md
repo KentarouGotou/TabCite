@@ -14,7 +14,6 @@ MSYS_NO_PATHCONV=1 docker run --rm -it -p 5173:5173 \
   -e WATCHPACK_POLLING=true \
   -e VITE_FS_USE_POLLING=true \
   -v "$(pwd -W):/app" \
-  -v /app/node_modules \
   tabsite sh -lc "npm ci || npm install; npm run dev -- --host 0.0.0.0"
 
 -after that
