@@ -13,7 +13,7 @@ const sampleTab = [
   { positions: [ { string: 2, fret: 1 } ], duration: 1.0 },
 ];
 
-const App = () => {
+const PositionMap = () => {
   // 再生中かどうか
   const [playing, setPlaying] = useState(false);
   // 現在のインデックス
@@ -104,4 +104,4 @@ const App = () => {
   );
 };
 
-export default App;
+export default PositionMap;
